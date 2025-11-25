@@ -5,4 +5,4 @@ export default function Home() {
       <p>타로 앱 서버가 정상적으로 작동 중입니다!</p>
     </div>
   );
-}git commit -m
+}
