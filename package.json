@@ -12,6 +12,7 @@
     "@ai-sdk/google": "^2.0.44",
     "@google/generative-ai": "^0.24.1",
     "ai": "^5.0.104",
+    "dotenv": "^17.2.3",
     "next": "^16.0.7",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"

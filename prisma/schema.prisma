@@ -1,36 +1,234 @@
-// prisma/schema.prisma
-
+// [1] 설정 (Generator & Datasource)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  // .env 파일에 있는 비밀번호를 가져다 씁니다
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // 6543 포트 (풀링용)
+  directUrl = env("DIRECT_URL")   // 5432 포트 (마이그레이션용)
 }
 
-// 1. 타로 카드 정보 테이블 (78장 데이터)
+// [2] 사용자 & 인증 (NextAuth)
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("user")
+
+  point         Int       @default(0)
+  currentSkinId Int?
+  isAdFree      Boolean   @default(false)
+
+  accounts      Account[]
+  sessions      Session[]
+  
+  // 관계형 데이터 연결
+  readings      Reading[]
+  pointLogs     PointLog[]
+  adLogs        AdRewardLog[]
+  unlockedSkins UserUnlockedSkin[]
+  expertProfile ExpertProfile?
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  consultationsAsClient Consultation[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 이메일 인증 등을 위해 NextAuth에서 권장하는 모델 (추가됨)
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// [3] 타로 시스템
 model TarotCard {
-  id           Int      @id @default(autoincrement())
-  name         String   @unique // 카드 이름 (예: The Fool)
-  number       Int      // 카드 번호 (0~77)
-  image        String   // 카드 이미지 URL
-  meaningUp    String   // 정방향 해석
-  meaningDown  String   // 역방향 해석
-  
-  // 관계 설정: 이 카드가 뽑힌 기록들
-  draws        DrawResult[]
+  id          Int     @id @default(autoincrement())
+  number      Int     @unique
+  name        String
+  nameKo      String?
+  imageUrl    String
+  meaningUp   String? @db.Text
+  meaningRev  String? @db.Text
+
+  readings    ReadingCard[]
 }
 
-// 2. 사용자가 카드를 뽑은 기록 테이블
-model DrawResult {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now()) // 언제 뽑았는지
-  userText  String   // 사용자의 고민 내용
-  aiAnswer  String   // AI가 해준 답변
+model Reading {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
   
-  // 어떤 카드를 뽑았는지 연결
-  cardId    Int
-  card      TarotCard @relation(fields: [cardId], references: [id])
+  question     String   @db.Text
+  spreadType   String
+  fullAnswer   String   @db.Text
+  summary      String?  @db.Text
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  cards        ReadingCard[]
+}
+
+model ReadingCard {
+  id           Int       @id @default(autoincrement())
+  
+  readingId    String
+  reading      Reading   @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  
+  cardId       Int
+  card         TarotCard @relation(fields: [cardId], references: [id])
+  
+  position     Int
+  orientation  String
+}
+
+// [4] 스킨 시스템
+model CardSkin {
+  id          Int      @id @default(autoincrement())
+  name        String
+  frontUrl    String
+  backUrl     String
+  price       Int
+  isDefault   Boolean  @default(false)
+
+  owners      UserUnlockedSkin[]
+}
+
+model UserUnlockedSkin {
+  id          Int      @id @default(autoincrement())
+  obtainedAt  DateTime @default(now())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  skinId      Int
+  skin        CardSkin @relation(fields: [skinId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skinId])
+}
+
+// [5] 전문가 시스템
+model ExpertProfile {
+  id           Int      @id @default(autoincrement())
+  
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  nickname     String
+  intro        String   @db.Text
+  specialty    String
+  pricePerChat Int
+  rating       Float    @default(0.0)
+  reviewCount  Int      @default(0)
+  
+  consultations Consultation[]
+}
+
+model Consultation {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  status       String
+  
+  clientId     String
+  client       User     @relation(fields: [clientId], references: [id])
+  
+  expertId     Int
+  expert       ExpertProfile @relation(fields: [expertId], references: [id])
+}
+
+// [6] 경제 & 커뮤니티
+model PointLog {
+  id           Int      @id @default(autoincrement())
+  amount       Int
+  reason       String
+  createdAt    DateTime @default(now())
+  
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AdRewardLog {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  
+  platform    String
+  reward      Int
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String   @db.Text
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+  
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+enum CardOrientation {
+  UPRIGHT
+  REVERSED
 }
