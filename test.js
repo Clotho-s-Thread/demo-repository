@@ -1,33 +1,18 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-// 아까 주신 그 키
-const apiKey = "AIzaSyBPrk3bSy_RYSBkibtsh4cPlKbblStegJA";
-const genAI = new GoogleGenerativeAI(apiKey);
-
-async function listModels() {
-  console.log("🔍 사용 가능한 모델 목록 조회 중...");
-  
-  try {
-    // 현재 이 키로 사용할 수 있는 모델을 다 보여달라고 요청
-    const models = await genAI.getGenerativeModel({ model: "gemini-pro" }).apiKey; 
-    // (참고: 위 방식 대신 더 확실한 모델 리스트 조회 함수 사용)
-    
-    // 이 부분은 SDK 버전에 따라 다를 수 있으니, 가장 확실한 방법은 
-    // 그냥 기본 모델로 통신이 되는지 보는 것입니다.
-    
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    const result = await model.generateContent("test");
-    console.log("✅ 'gemini-pro' 모델은 살아있음!");
-    
-  } catch (error) {
-    console.log("❌ 실패 원인:", error.message);
-    
-    if (error.message.includes("API not enabled")) {
-        console.log("👉 결론: 구글 클라우드에서 [ENABLE] 버튼을 안 눌렀습니다!");
-    } else {
-        console.log("👉 결론: 프로젝트 설정이 꼬였습니다.");
-    }
-  }
-}
-
-listModels();
+// test.js
+fetch('http://localhost:3000/api/tarot/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    messages: [
+      { role: "user", content: "요즘 프로젝트 준비하느라 너무 힘든데, 앞으로 상황이 좀 나아질까요?" }
+    ],
+    selectedCards: [
+      { number: 0, isReversed: false },
+      { number: 13, isReversed: true }, // 죽음 역방향 테스트
+      { number: 19, isReversed: false }
+    ]
+  })
+})
+.then(res => res.json())
+.then(data => console.log("\n🔮 클로토의 답변:\n", data.text))
+.catch(err => console.error("❌ 에러 발생:", err));
